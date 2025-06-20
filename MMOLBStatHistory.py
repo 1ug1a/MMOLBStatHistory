@@ -11,7 +11,7 @@ from pathlib import Path
 
 # mmolb stat history by dusk (@1ug1a)
 
-STAT_MODE = 'Batters' # 'Player' (uses PLAYER_ID), 'Batters', or 'Pitchers' (uses TEAM_ID)
+STAT_MODE = 'Player' # 'Player' (uses PLAYER_ID), 'Batters', or 'Pitchers' (uses TEAM_ID)
 PLAYER_ID = '68411097554d8039701f195b'
 TEAM_ID = '6806c6869edf4f7b46032b9a'
 
@@ -62,6 +62,7 @@ def parse_feed(info, season_num, day_start, day_end):
   feed = info['Feed']
   parsed_feed = {}
   for entry in feed:
+    # todo: proper handling of special days (as it doesn't make a mark on the graph)
     if entry['season'] == season_num and (day_start <= entry['day'] <= day_end if isinstance(entry['day'], int) else True) and entry['type'] == 'augment':
       parsed_feed[entry['day']] = entry['text']
   return parsed_feed
