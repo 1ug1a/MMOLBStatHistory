@@ -11,12 +11,9 @@ from pathlib import Path
 
 # mmolb stat history by dusk (@1ug1a)
 
-# scratchpad of various feature ideas
-# - team(-position-type)-wide stat history
-
 STAT_MODE = 'Pitchers' # 'Player' (uses PLAYER_ID), 'Batters', or 'Pitchers' (uses TEAM_ID)
-PLAYER_ID = '6841131408b7fc5e21e8acdb'
-TEAM_ID = '68070fbe9edf4f7b460330bf'
+PLAYER_ID = '6841120c144e874e6deb85d2'
+TEAM_ID = '6806c6869edf4f7b46032b9a'
 
 SEASON_NUM = 1
 DAY_START = 2
@@ -24,19 +21,21 @@ DAY_END = 230
 
 SOLO_BATTING_STATS = ['ba', 'obp', 'slg', 'ops', 'babip', 'bb_p', 'k_p', 'sb_p']
 SOLO_PITCHING_STATS = ['era', 'fip_r', 'whip', 'h9', 'hr9', 'k9', 'bb9', 'kpbb']
-USE_SOLO_CUSTOM_STATS = True
+USE_SOLO_CUSTOM_STATS = False
 SOLO_CUSTOM_STATS = ['ops',  'era']
 
 TEAM_BATTER_STAT = 'ops'
 TEAM_PITCHER_STAT = 'era'
 
-MAX_CON_REQ = 4
+ROLLING_AVG_WINDOW = 5
+
+MAX_CONNECTIONS = 4
 SCRIPT_PATH = Path(getsourcefile(lambda: 0)).resolve()
 DB_PATH = SCRIPT_PATH.parent / 'MMOLBStatHistory.db'
 
 CACHE = SQLiteBackend(
   cache_name=DB_PATH,  # For SQLite, this will be used as the filename
-  expire_after=60*60,                         
+  expire_after=60*25,                         
 )
 
 # info-gathering
@@ -82,7 +81,7 @@ def get_player_stat_history(p_id, season_num, day_start, day_end):
   for day in range(day_start, day_end+1, 2):
     api_urls.append(f'https://freecashe.ws/api/player-stats?player={p_id}&start={season_num},0&end={season_num},{day}')
     history[day] = {}
-  api_data = asyncio.run(get_urls(api_urls, MAX_CON_REQ))
+  api_data = asyncio.run(get_urls(api_urls, MAX_CONNECTIONS))
   i = 0
   for day in history.keys():
     history[day] = api_data[i][0]['stats'] if api_data[i] else {}
@@ -98,7 +97,7 @@ def get_team_stat_history(t_id, t_dict, stat_mode, season_num, day_start, day_en
   for day in range(day_start, day_end+1, 2):
     api_urls.append(f'https://freecashe.ws/api/player-stats?team={t_id}&start={season_num},0&end={season_num},{day}')
     history[day] = {}
-  api_data = asyncio.run(get_urls(api_urls, MAX_CON_REQ))
+  api_data = asyncio.run(get_urls(api_urls, MAX_CONNECTIONS))
   i = 0
   # wow this is a mess
   temp_data = {}
@@ -239,12 +238,12 @@ def plot_team_stats(t_parsed, t_info, t_dict, t_feed, day_start, day_end, stat_m
       if day in history:
         plots[p_id].append(history[day][stat])
       else:
-        plots[p_id].append(0.0)
+        plots[p_id].append(np.nan)
       
 
   means = {}
   for p_id in p_ids:
-    means[p_id] = pd.Series(plots[p_id]).rolling(window=5, min_periods=1, center=True).mean()
+    means[p_id] = pd.Series(plots[p_id]).rolling(window=ROLLING_AVG_WINDOW, min_periods=1, center=True).mean()
 
   fig, ax = plt.subplots(layout="constrained", figsize=(12, 6))
 
@@ -287,7 +286,7 @@ def plot_solo_stats(p_statlines, p_info, t_info, p_feed, day_start, day_end):
       stat_arrays[stat].append(val[stat])
   mean_arrays = {}
   for stat in stat_labels:
-    mean_arrays[stat] = pd.Series(stat_arrays[stat]).rolling(window=5, min_periods=1, center=True).mean()
+    mean_arrays[stat] = pd.Series(stat_arrays[stat]).rolling(window=ROLLING_AVG_WINDOW, min_periods=1, center=True).mean()
 
   fig, ax = plt.subplots(layout="constrained", figsize=(12, 6))
 
