@@ -11,22 +11,22 @@ from pathlib import Path
 
 # mmolb stat history by dusk (@1ug1a)
 
-STAT_MODE = 'Player' # 'Player' (uses PLAYER_ID), 'Batters', or 'Pitchers' (uses TEAM_ID)
+STAT_MODE = 'Batters' # 'Player' (uses PLAYER_ID), 'Batters', or 'Pitchers' (uses TEAM_ID)
 PLAYER_ID = '68411097554d8039701f195b'
 TEAM_ID = '6806c6869edf4f7b46032b9a'
 
 SEASON_NUM = 1
 DAY_START = 1
-DAY_END = 231
+DAY_END = 240
 
 ROLLING_AVG_WINDOW = 5
 
 SOLO_BATTING_STATS = ['ba', 'obp', 'slg', 'ops', 'babip', 'bb_p', 'k_p', 'sb_p']
 SOLO_PITCHING_STATS = ['era', 'fip_r', 'whip', 'h9', 'hr9', 'k9', 'bb9', 'kpbb']
 USE_SOLO_CUSTOM_STATS = False
-SOLO_CUSTOM_STATS = ['ops',  'era']
+SOLO_CUSTOM_STATS = ['ops', 'era']
 
-TEAM_BATTER_STAT = 'ops'
+TEAM_BATTER_STAT = 'slg'
 TEAM_PITCHER_STAT = 'era'
 
 MAX_CONNECTIONS = 4
@@ -37,6 +37,14 @@ CACHE = SQLiteBackend(
   cache_name=DB_PATH,  # For SQLite, this will be used as the filename
   expire_after=60*25,                         
 )
+
+# ok fixing greater league messed up lesser league so i am resolving this once and for all
+def get_actual_start(t_id):
+  is_greater_league = (t_id in ['6805db0cac48194de3cd3fe4', '6805db0cac48194de3cd3fe5'])
+  if is_greater_league: # e.g. if DAY_START == 1, no change. if DAY_START == 2, add 1
+    return DAY_START + (DAY_START + 1) % 2
+  else:
+    return DAY_START + (DAY_START) % 2
 
 # info-gathering
 def get_player_info_lite(p_id):
@@ -263,12 +271,15 @@ def plot_team_stats(t_parsed, t_info, t_dict, t_feed, day_start, day_end, stat_m
 
   ax.set_xlabel('Day')
   ax.set_xlim(left=day_start, right=day_end)
-  ax.set_xticks(np.arange(day_start, day_end))
+  ax.set_xticks(np.arange(day_start, day_end+1, 2))
+  ax.set_xticklabels(np.arange(day_start, day_end+1, 2))
   ax.set_title(f'{t_name} S{SEASON_NUM} {stat_mode[:-3] + "ing"} History ({stat.upper()})')
   ax.grid(which='major', color='#999999', linewidth=0.8)
   ax.grid(which='minor', color='#CCCCCC', linestyle=':', linewidth=0.5)
   ax.minorticks_on()
   ax.legend()
+
+  ax.xaxis.set_major_locator(ticker.MaxNLocator(integer=True, nbins=12))
 
   active_players = set([f'{t_dict[p_id]["FirstName"]} {t_dict[p_id]["LastName"]}' for p_id in p_ids])
   text = ''
@@ -286,9 +297,7 @@ def plot_team_stats(t_parsed, t_info, t_dict, t_feed, day_start, day_end, stat_m
               xycoords = 'axes pixels',
               va = 'top')
   '''
-
-  ax.xaxis.set_major_locator(ticker.MaxNLocator(integer=True))
-
+  
   plt.show()
 
 def plot_solo_stats(p_statlines, p_info, t_info, p_feed, day_start, day_end):
@@ -306,7 +315,7 @@ def plot_solo_stats(p_statlines, p_info, t_info, p_feed, day_start, day_end):
 
   fig, ax = plt.subplots(layout="constrained", figsize=(12, 6))
 
-  #print(day_numbers)
+  print(day_numbers)
   #print(stat_labels)
   for stat in stat_labels:
     ax.plot(day_numbers, mean_arrays[stat], label = stat)
@@ -318,14 +327,15 @@ def plot_solo_stats(p_statlines, p_info, t_info, p_feed, day_start, day_end):
 
   ax.set_xlabel('Day')
   ax.set_xlim(left=day_start, right=day_end)
-  ax.set_xticks(np.arange(day_start, day_end))
+  ax.set_xticks(np.arange(day_start, day_end+1, 2))
+  ax.set_xticklabels(np.arange(day_start, day_end+1, 2))
   ax.set_title(f'{p_name} ({t_name}) S{SEASON_NUM} {p_pos_type} History')
   ax.grid(which='major', color='#999999', linewidth=0.8)
   ax.grid(which='minor', color='#CCCCCC', linestyle=':', linewidth=0.5)
   ax.minorticks_on()
   ax.legend()
-
-  ax.xaxis.set_major_locator(ticker.MaxNLocator(integer=True))
+  
+  ax.xaxis.set_major_locator(ticker.MaxNLocator(nbins=12))
 
   text = ''
   for day in p_feed:
@@ -349,26 +359,30 @@ def main():
       exit()
     t_id = p_info['TeamID']
     t_info = get_team_info_lite(t_id)
-    p_history = get_player_stat_history(PLAYER_ID, SEASON_NUM, DAY_START, DAY_END)
+    l_id = t_info['League']
+    actual_start = get_actual_start(l_id)
+    p_history = get_player_stat_history(PLAYER_ID, SEASON_NUM, actual_start, DAY_END)
     #print(p_history)
     p_statlines = parse_player_stat_history(p_history, p_info)
     #print(p_statlines)
-    p_feed = parse_feed(p_info, SEASON_NUM, DAY_START, DAY_END)
-    plot_solo_stats(p_statlines, p_info, t_info, p_feed, DAY_START, DAY_END)
+    p_feed = parse_feed(p_info, SEASON_NUM, actual_start, DAY_END)
+    plot_solo_stats(p_statlines, p_info, t_info, p_feed, actual_start, DAY_END)
   else:
     t_info = get_team_info_lite(TEAM_ID)
     if t_info == {}:
       print('Invalid team ID.')
       exit()
     t_dict = get_player_id_dict(t_info)
+    l_id = t_info['League']
+    actual_start = get_actual_start(l_id)
     #print(t_dict)
-    t_history = get_team_stat_history(TEAM_ID, t_dict, STAT_MODE, SEASON_NUM, DAY_START, DAY_END)
+    t_history = get_team_stat_history(TEAM_ID, t_dict, STAT_MODE, SEASON_NUM, actual_start, DAY_END)
     t_parsed = parse_team_stat_history(t_history, t_dict)
     #for player_id in t_parsed:
       #print(player_id)
       #print(t_parsed[player_id])
-    t_feed = parse_feed(t_info, SEASON_NUM, DAY_START, DAY_END)
-    plot_team_stats(t_parsed, t_info, t_dict, t_feed, DAY_START, DAY_END, STAT_MODE)
+    t_feed = parse_feed(t_info, SEASON_NUM, actual_start, DAY_END)
+    plot_team_stats(t_parsed, t_info, t_dict, t_feed, actual_start, DAY_END, STAT_MODE)
 
 if __name__ == '__main__':
   main()
