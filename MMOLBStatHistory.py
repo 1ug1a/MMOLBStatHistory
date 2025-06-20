@@ -26,7 +26,7 @@ SOLO_PITCHING_STATS = ['era', 'fip_r', 'whip', 'h9', 'hr9', 'k9', 'bb9', 'kpbb']
 USE_SOLO_CUSTOM_STATS = False
 SOLO_CUSTOM_STATS = ['ops', 'era']
 
-TEAM_BATTER_STAT = 'slg'
+TEAM_BATTER_STAT = 'ops'
 TEAM_PITCHER_STAT = 'era'
 
 MAX_CONNECTIONS = 4
