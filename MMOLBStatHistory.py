@@ -11,9 +11,9 @@ from pathlib import Path
 
 # mmolb stat history by dusk (@1ug1a)
 
-STAT_MODE = 'Player' # 'Player' (uses PLAYER_ID), 'Batters', or 'Pitchers' (uses TEAM_ID)
-PLAYER_ID = '680c69a6ecda7a92d4c14cb8'
-TEAM_ID = '6805db0cac48194de3cd40b5'
+STAT_MODE = 'Batters' # 'Player' (uses PLAYER_ID), 'Batters', or 'Pitchers' (uses TEAM_ID)
+PLAYER_ID = '68411097554d8039701f195b'
+TEAM_ID = '6806c6869edf4f7b46032b9a'
 
 SEASON_NUM = 1
 DAY_START = 1
@@ -58,19 +58,11 @@ def get_player_id_dict(t_info):
     players[player['PlayerID']] = player
   return players
 
-def parse_player_feed(p_info, season_num, day_start, day_end):
-  feed = p_info['Feed']
+def parse_feed(info, season_num, day_start, day_end):
+  feed = info['Feed']
   parsed_feed = {}
   for entry in feed:
-    if entry['season'] == season_num and (day_start <= entry['day'] <= day_end) and entry['type'] == 'augment':
-      parsed_feed[entry['day']] = entry['text']
-  return parsed_feed
-
-def parse_team_feed(t_info, season_num, day_start, day_end):
-  feed = t_info['Feed']
-  parsed_feed = {}
-  for entry in feed:
-    if entry['season'] == season_num and isinstance(entry['day'], int) and (day_start <= entry['day'] <= day_end) and entry['type'] == 'augment':
+    if entry['season'] == season_num and (day_start <= entry['day'] <= day_end if isinstance(entry['day'], int) else True) and entry['type'] == 'augment':
       parsed_feed[entry['day']] = entry['text']
   return parsed_feed
 
@@ -271,18 +263,28 @@ def plot_team_stats(t_parsed, t_info, t_dict, t_feed, day_start, day_end, stat_m
   ax.set_xlabel('Day')
   ax.set_xlim(left=day_start, right=day_end)
   ax.set_xticks(np.arange(day_start, day_end))
-  ax.set_title(f'{t_name} {stat_mode[:-3] + "ing"} History ({stat.upper()})')
+  ax.set_title(f'{t_name} S{SEASON_NUM} {stat_mode[:-3] + "ing"} History ({stat.upper()})')
   ax.grid(which='major', color='#999999', linewidth=0.8)
   ax.grid(which='minor', color='#CCCCCC', linestyle=':', linewidth=0.5)
   ax.minorticks_on()
   ax.legend()
 
+  active_players = set([f'{t_dict[p_id]["FirstName"]} {t_dict[p_id]["LastName"]}' for p_id in p_ids])
   text = ''
   for day in t_feed:
-    text += f'Day {day}: {t_feed[day]}\n'
-    ax.axvline(x=day, color='gray', linestyle='--', label=t_feed[day])
+    if any(name in t_feed[day] for name in active_players):
+      text += f'Day {day}: {t_feed[day]}\n' if isinstance(day, int) else f'{day}: {t_feed[day]}\n'
+      ax.axvline(x=day, color='gray', linestyle='--', label=t_feed[day])
   text = text.rstrip('\n')
   print(text)
+
+  # these are too tall to have in the layout and i cannot see another way around it
+  '''
+  ax.annotate(text,
+              xy = (0, -50),
+              xycoords = 'axes pixels',
+              va = 'top')
+  '''
 
   ax.xaxis.set_major_locator(ticker.MaxNLocator(integer=True))
 
@@ -316,7 +318,7 @@ def plot_solo_stats(p_statlines, p_info, t_info, p_feed, day_start, day_end):
   ax.set_xlabel('Day')
   ax.set_xlim(left=day_start, right=day_end)
   ax.set_xticks(np.arange(day_start, day_end))
-  ax.set_title(f'{p_name} ({t_name}) {p_pos_type} History')
+  ax.set_title(f'{p_name} ({t_name}) S{SEASON_NUM} {p_pos_type} History')
   ax.grid(which='major', color='#999999', linewidth=0.8)
   ax.grid(which='minor', color='#CCCCCC', linestyle=':', linewidth=0.5)
   ax.minorticks_on()
@@ -326,7 +328,7 @@ def plot_solo_stats(p_statlines, p_info, t_info, p_feed, day_start, day_end):
 
   text = ''
   for day in p_feed:
-    text += f'Day {day}: {p_feed[day]}\n'
+    text += f'Day {day}: {p_feed[day]}\n' if isinstance(day, int) else f'{day}: {p_feed[day]}\n'
     ax.axvline(x=day, color='gray', linestyle='--', label=p_feed[day])
   text = text.rstrip('\n')
   #print(text)
@@ -350,7 +352,7 @@ def main():
     #print(p_history)
     p_statlines = parse_player_stat_history(p_history, p_info)
     #print(p_statlines)
-    p_feed = parse_player_feed(p_info, SEASON_NUM, DAY_START, DAY_END)
+    p_feed = parse_feed(p_info, SEASON_NUM, DAY_START, DAY_END)
     plot_solo_stats(p_statlines, p_info, t_info, p_feed, DAY_START, DAY_END)
   else:
     t_info = get_team_info_lite(TEAM_ID)
@@ -364,7 +366,7 @@ def main():
     #for player_id in t_parsed:
       #print(player_id)
       #print(t_parsed[player_id])
-    t_feed = parse_team_feed(t_info, SEASON_NUM, DAY_START, DAY_END)
+    t_feed = parse_feed(t_info, SEASON_NUM, DAY_START, DAY_END)
     plot_team_stats(t_parsed, t_info, t_dict, t_feed, DAY_START, DAY_END, STAT_MODE)
 
 if __name__ == '__main__':
