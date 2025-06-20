@@ -1,5 +1,6 @@
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
+from cycler import cycler
 import numpy as np
 import pandas as pd
 
@@ -11,15 +12,15 @@ from pathlib import Path
 
 # mmolb stat history by dusk (@1ug1a)
 
-STAT_MODE = 'Batters' # 'Player' (uses PLAYER_ID), 'Batters', or 'Pitchers' (uses TEAM_ID)
+STAT_MODE = 'Pitchers' # 'Player' (uses PLAYER_ID), 'Batters', or 'Pitchers' (uses TEAM_ID)
 PLAYER_ID = '68411097554d8039701f195b'
-TEAM_ID = '6806c6869edf4f7b46032b9a'
+TEAM_ID = '6805db0cac48194de3cd4069'
 
 SEASON_NUM = 1
-DAY_START = 1
+DAY_START = 20
 DAY_END = 240
 
-ROLLING_AVG_WINDOW = 5
+ROLLING_AVG_WINDOW = 1
 
 SOLO_BATTING_STATS = ['ba', 'obp', 'slg', 'ops', 'babip', 'bb_p', 'k_p', 'sb_p']
 SOLO_PITCHING_STATS = ['era', 'fip_r', 'whip', 'h9', 'hr9', 'k9', 'bb9', 'kpbb']
@@ -37,6 +38,10 @@ CACHE = SQLiteBackend(
   cache_name=DB_PATH,  # For SQLite, this will be used as the filename
   expire_after=60*25,                         
 )
+
+USE_CUSTOM_COLORS = False
+CUSTOM_COLORS = '#7F3C8D,#11A579,#3969AC,#F2B701,#E73F74,#80BA5A,#E68310,#008695,#CF1C90,#f97b72,#4b4b8f,#A5AA99'.split(',')
+CYCLER = cycler(color=CUSTOM_COLORS) if USE_CUSTOM_COLORS else None
 
 # ok fixing greater league messed up lesser league so i am resolving this once and for all
 def get_actual_start(t_id):
@@ -261,6 +266,8 @@ def plot_team_stats(t_parsed, t_info, t_dict, t_feed, day_start, day_end, stat_m
 
   fig, ax = plt.subplots(layout="constrained", figsize=(12, 6))
 
+  ax.set_prop_cycle(CYCLER)
+
   #print(day_numbers)
   #print(stat_labels)
   for p_id in p_ids:
@@ -314,6 +321,8 @@ def plot_solo_stats(p_statlines, p_info, t_info, p_feed, day_start, day_end):
     mean_arrays[stat] = pd.Series(stat_arrays[stat]).rolling(window=ROLLING_AVG_WINDOW, min_periods=1, center=True).mean()
 
   fig, ax = plt.subplots(layout="constrained", figsize=(12, 6))
+
+  ax.set_prop_cycle(CYCLER)
 
   print(day_numbers)
   #print(stat_labels)
