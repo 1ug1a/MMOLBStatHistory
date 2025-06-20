@@ -221,7 +221,7 @@ def parse_player_stats_pitcher(p_stats):
 def plot_team_stats(t_parsed, t_info, t_dict, t_feed, day_start, day_end, stat_mode):
   day_numbers = np.arange(day_start, day_end)
   p_ids = list(t_parsed.keys())
-  player_labels = {p_id: f'{t_dict[p_id]['Position']} {t_dict[p_id]['FirstName']} {t_dict[p_id]['LastName']}' for p_id in p_ids}
+  player_labels = {p_id: f'{t_dict[p_id]["Position"]} {t_dict[p_id]["FirstName"]} {t_dict[p_id]["LastName"]}' for p_id in p_ids}
 
   if stat_mode == 'Batters':
     stat = TEAM_BATTER_STAT
