@@ -1,7 +1,7 @@
 # mmolb stat history
 in lieu of freecashe.ws not currently having stat trendlines at the moment i made this (thank you freecashe.ws devs for the api! i tried to minimize the number of API requests though that's kinda hard when you have to get data from across an entire season orz)
 
-features:
+# features:
 - show various stats of a single player
 - show a single stat across an entire team's pitchers or batters
 - choose which season and range of days to visualize
