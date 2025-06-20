@@ -11,13 +11,15 @@ from pathlib import Path
 
 # mmolb stat history by dusk (@1ug1a)
 
-STAT_MODE = 'Pitchers' # 'Player' (uses PLAYER_ID), 'Batters', or 'Pitchers' (uses TEAM_ID)
-PLAYER_ID = '6841120c144e874e6deb85d2'
-TEAM_ID = '6806c6869edf4f7b46032b9a'
+STAT_MODE = 'Player' # 'Player' (uses PLAYER_ID), 'Batters', or 'Pitchers' (uses TEAM_ID)
+PLAYER_ID = '680c69a6ecda7a92d4c14cb8'
+TEAM_ID = '6805db0cac48194de3cd40b5'
 
 SEASON_NUM = 1
-DAY_START = 2
-DAY_END = 230
+DAY_START = 1
+DAY_END = 231
+
+ROLLING_AVG_WINDOW = 5
 
 SOLO_BATTING_STATS = ['ba', 'obp', 'slg', 'ops', 'babip', 'bb_p', 'k_p', 'sb_p']
 SOLO_PITCHING_STATS = ['era', 'fip_r', 'whip', 'h9', 'hr9', 'k9', 'bb9', 'kpbb']
@@ -26,8 +28,6 @@ SOLO_CUSTOM_STATS = ['ops',  'era']
 
 TEAM_BATTER_STAT = 'ops'
 TEAM_PITCHER_STAT = 'era'
-
-ROLLING_AVG_WINDOW = 5
 
 MAX_CONNECTIONS = 4
 SCRIPT_PATH = Path(getsourcefile(lambda: 0)).resolve()
@@ -219,9 +219,7 @@ def parse_player_stats_pitcher(p_stats):
   return stats
 
 def plot_team_stats(t_parsed, t_info, t_dict, t_feed, day_start, day_end, stat_mode):
-  day_start = day_start if day_start % 2 == 0 else day_start+1
-  day_end = day_end if day_end % 2 == 0 else day_end-1
-  day_numbers = np.arange(day_start, day_end, 2)
+  day_numbers = np.arange(day_start, day_end)
   p_ids = list(t_parsed.keys())
   player_labels = {p_id: f'{t_dict[p_id]['Position']} {t_dict[p_id]['FirstName']} {t_dict[p_id]['LastName']}' for p_id in p_ids}
 
@@ -239,25 +237,40 @@ def plot_team_stats(t_parsed, t_info, t_dict, t_feed, day_start, day_end, stat_m
         plots[p_id].append(history[day][stat])
       else:
         plots[p_id].append(np.nan)
-      
+
+  # this feels really inefficient but this fixes the rolling mean stuff
+  updated_days = []
+  updated_plots = {}
+  for p_id, value in plots.items():
+    updated_plots[p_id] = []
+
+  for index, day in enumerate(day_numbers):
+    all_nan = True
+    for p_id, value in plots.items():
+      if not np.isnan(value[index]):
+        all_nan = False
+    if not all_nan:
+      updated_days.append(day)
+      for p_id, value in plots.items():
+        updated_plots[p_id].append(value[index])
 
   means = {}
   for p_id in p_ids:
-    means[p_id] = pd.Series(plots[p_id]).rolling(window=ROLLING_AVG_WINDOW, min_periods=1, center=True).mean()
+    means[p_id] = pd.Series(updated_plots[p_id]).rolling(window=ROLLING_AVG_WINDOW, min_periods=1, center=True).mean()
 
   fig, ax = plt.subplots(layout="constrained", figsize=(12, 6))
 
   #print(day_numbers)
   #print(stat_labels)
   for p_id in p_ids:
-    ax.plot(day_numbers, means[p_id], label = player_labels[p_id])
+    ax.plot(updated_days, means[p_id], label = player_labels[p_id])
     #print(stat_arrays[stat])
 
   t_name = f'{t_info['Location']} {t_info['Name']}'
 
   ax.set_xlabel('Day')
   ax.set_xlim(left=day_start, right=day_end)
-  ax.set_xticks(np.arange(day_start, day_end, 2))
+  ax.set_xticks(np.arange(day_start, day_end))
   ax.set_title(f'{t_name} {stat_mode[:-3] + "ing"} History ({stat.upper()})')
   ax.grid(which='major', color='#999999', linewidth=0.8)
   ax.grid(which='minor', color='#CCCCCC', linestyle=':', linewidth=0.5)
@@ -302,7 +315,7 @@ def plot_solo_stats(p_statlines, p_info, t_info, p_feed, day_start, day_end):
 
   ax.set_xlabel('Day')
   ax.set_xlim(left=day_start, right=day_end)
-  ax.set_xticks(np.arange(day_start, day_end, 2))
+  ax.set_xticks(np.arange(day_start, day_end))
   ax.set_title(f'{p_name} ({t_name}) {p_pos_type} History')
   ax.grid(which='major', color='#999999', linewidth=0.8)
   ax.grid(which='minor', color='#CCCCCC', linestyle=':', linewidth=0.5)
