@@ -81,17 +81,20 @@ def get_actual_end(l_id):
     return DAY_END - (DAY_END) % 2
 
 # info-gathering
+SEASON_TIMESTAMPS = {
+  0: '&at=2025-05-05T06:33:28.318Z'
+}
+
 def get_player_info(p_id):
-  response = asyncio.run(get_urls(f'https://freecashe.ws/api/chron/v0/entities?kind=player_lite&id={p_id}'))
+  api_url = f'https://freecashe.ws/api/chron/v0/entities?kind=player&id={p_id}' + (SEASON_TIMESTAMPS.get(SEASON_NUM, ''))
+  response = asyncio.run(get_urls(api_url))
   #print(response['items'])
   response = response['items'][0]['data'] if len(response['items']) != 0 else {}
   return response
 
 def get_team_info(t_id):
-  if SEASON_NUM == 0:
-    response = asyncio.run(get_urls(f'https://freecashe.ws/api/chron/v0/entities?kind=team&id={t_id}&at=2025-05-05T06:33:28.318Z'))
-  else:
-    response = asyncio.run(get_urls(f'https://freecashe.ws/api/chron/v0/entities?kind=team_lite&id={t_id}'))
+  api_url = f'https://freecashe.ws/api/chron/v0/entities?kind=team&id={t_id}' + (SEASON_TIMESTAMPS.get(SEASON_NUM, ''))
+  response = asyncio.run(get_urls(api_url))
   #print(response['items'])
   response = response['items'][0]['data'] if len(response['items']) != 0 else {}
   return response
