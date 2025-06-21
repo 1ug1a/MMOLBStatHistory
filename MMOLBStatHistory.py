@@ -17,10 +17,10 @@ PLAYER_ID = '68411097554d8039701f195b'
 TEAM_ID = '6805db0cac48194de3cd40b5'
 
 SEASON_NUM = 1
-DAY_START = 11
-DAY_END = 34
+DAY_START = 0
+DAY_END = 240
 
-ROLLING_AVG_WINDOW = 1
+ROLLING_AVG_WINDOW = 5
 
 SOLO_BATTING_STATS = ['ba', 'obp', 'slg', 'ops', 'babip', 'bb_p', 'k_p', 'sb_p']
 SOLO_PITCHING_STATS = ['era', 'fip_r', 'whip', 'h9', 'hr9', 'k9', 'bb9', 'kpbb']
