@@ -17,7 +17,7 @@ from pathlib import Path
 # config stuff!
 
 # STAT_MODE: decides what gets graphed. 'Player', 'Batters', or 'Pitchers'.
-STAT_MODE = 'Pitchers' 
+STAT_MODE = 'Player' 
 # ID: make sure to use a player ID for 'Player' mode, and a team ID for 'Batters'/'Pitchers'.
 ID = '68411097554d8039701f195b'
 
