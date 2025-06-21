@@ -1,4 +1,5 @@
 aiohttp_client_cache==0.13.0
+aiosqlite==0.21.0
 matplotlib==3.10.1
 numpy==2.3.0
 pandas==2.3.0
