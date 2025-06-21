@@ -323,8 +323,8 @@ def plot_team_stats(t_parsed, t_info, t_dict, t_feed, day_start, day_end, stat_m
   active_players = set([f'{t_dict[p_id]["FirstName"]} {t_dict[p_id]["LastName"]}' for p_id in p_ids])
   text = ''
   for day in t_feed:
+    text += f'Day {day}: {t_feed[day]}\n' if isinstance(day, int) else f'{day}: {t_feed[day]}\n'
     if any(name in t_feed[day] for name in active_players) and isinstance(day, int):
-      text += f'Day {day}: {t_feed[day]}\n' if isinstance(day, int) else f'{day}: {t_feed[day]}\n'
       ax.axvline(x=day, color='gray', linestyle='--', label=t_feed[day])
   text = text.rstrip('\n')
   print(text)
