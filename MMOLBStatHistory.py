@@ -17,12 +17,12 @@ from pathlib import Path
 # config stuff!
 
 # STAT_MODE: decides what gets graphed. 'Player', 'Batters', or 'Pitchers'.
-STAT_MODE = 'Player' 
+STAT_MODE = 'Pitchers' 
 # ID: make sure to use a player ID for 'Player' mode, and a team ID for 'Batters'/'Pitchers'.
-ID = '68411097554d8039701f195b'
+ID = '6806c6869edf4f7b46032b9a'
 
 # SEASON_NUM, DAY_START, DAY_END: choose which days to include in the graph.
-SEASON_NUM = 1
+SEASON_NUM = 0
 DAY_START = 0
 DAY_END = 240
 
@@ -81,14 +81,17 @@ def get_actual_end(l_id):
     return DAY_END - (DAY_END) % 2
 
 # info-gathering
-def get_player_info_lite(p_id):
+def get_player_info(p_id):
   response = asyncio.run(get_urls(f'https://freecashe.ws/api/chron/v0/entities?kind=player_lite&id={p_id}'))
   #print(response['items'])
   response = response['items'][0]['data'] if len(response['items']) != 0 else {}
   return response
 
-def get_team_info_lite(t_id):
-  response = asyncio.run(get_urls(f'https://freecashe.ws/api/chron/v0/entities?kind=team_lite&id={t_id}'))
+def get_team_info(t_id):
+  if SEASON_NUM == 0:
+    response = asyncio.run(get_urls(f'https://freecashe.ws/api/chron/v0/entities?kind=team&id={t_id}&at=2025-05-05T06:33:28.318Z'))
+  else:
+    response = asyncio.run(get_urls(f'https://freecashe.ws/api/chron/v0/entities?kind=team_lite&id={t_id}'))
   #print(response['items'])
   response = response['items'][0]['data'] if len(response['items']) != 0 else {}
   return response
@@ -101,7 +104,7 @@ def get_player_id_dict(t_info):
   return players
 
 def parse_feed(info, season_num, day_start, day_end):
-  feed = info['Feed']
+  feed = info['Feed'] if 'Feed' in info else {}
   parsed_feed = {}
   for entry in feed:
     # todo: proper handling of special days (as it doesn't make a mark on the graph)
@@ -389,12 +392,12 @@ def plot_solo_stats(p_statlines, p_info, t_info, p_feed, day_start, day_end):
 
 def main():
   if STAT_MODE == 'Player':
-    p_info = get_player_info_lite(ID)
+    p_info = get_player_info(ID)
     if p_info == {}:
       print('Invalid player ID.')
       exit()
     t_id = p_info['TeamID']
-    t_info = get_team_info_lite(t_id)
+    t_info = get_team_info(t_id)
     l_id = t_info['League']
     actual_start = get_actual_start(l_id)
     actual_end = get_actual_end(l_id)
@@ -405,7 +408,7 @@ def main():
     p_feed = parse_feed(p_info, SEASON_NUM, actual_start, actual_end)
     plot_solo_stats(p_statlines, p_info, t_info, p_feed, actual_start, actual_end)
   else:
-    t_info = get_team_info_lite(ID)
+    t_info = get_team_info(ID)
     if t_info == {}:
       print('Invalid team ID.')
       exit()
