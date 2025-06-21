@@ -19,10 +19,10 @@ from pathlib import Path
 # STAT_MODE: decides what gets graphed. 'Player', 'Batters', or 'Pitchers'.
 STAT_MODE = 'Pitchers' 
 # ID: make sure to use a player ID for 'Player' mode, and a team ID for 'Batters'/'Pitchers'.
-ID = '6806c6869edf4f7b46032b9a'
+ID = '6805f5ad491122e5fe35216b'
 
 # SEASON_NUM, DAY_START, DAY_END: choose which days to include in the graph.
-SEASON_NUM = 0
+SEASON_NUM = 1
 DAY_START = 0
 DAY_END = 240
 
@@ -323,7 +323,7 @@ def plot_team_stats(t_parsed, t_info, t_dict, t_feed, day_start, day_end, stat_m
   active_players = set([f'{t_dict[p_id]["FirstName"]} {t_dict[p_id]["LastName"]}' for p_id in p_ids])
   text = ''
   for day in t_feed:
-    if any(name in t_feed[day] for name in active_players):
+    if any(name in t_feed[day] for name in active_players) and isinstance(day, int):
       text += f'Day {day}: {t_feed[day]}\n' if isinstance(day, int) else f'{day}: {t_feed[day]}\n'
       ax.axvline(x=day, color='gray', linestyle='--', label=t_feed[day])
   text = text.rstrip('\n')
