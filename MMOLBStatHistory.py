@@ -10,42 +10,62 @@ import asyncio
 from inspect import getsourcefile
 from pathlib import Path
 
-# mmolb stat history by dusk (@1ug1a)
+#######################################
+# mmolb stat history by dusk (@1ug1a) #
+#######################################
 
-STAT_MODE = 'Pitchers' # 'Player' (uses PLAYER_ID), 'Batters', or 'Pitchers' (uses TEAM_ID)
-PLAYER_ID = '68411097554d8039701f195b'
-TEAM_ID = '6805db0cac48194de3cd40b5'
+# config stuff!
 
+# STAT_MODE: decides what gets graphed. 'Player', 'Batters', or 'Pitchers'.
+STAT_MODE = 'Pitchers' 
+# ID: make sure to use a player ID for 'Player' mode, and a team ID for 'Batters'/'Pitchers'.
+ID = '68411097554d8039701f195b'
+
+# SEASON_NUM, DAY_START, DAY_END: choose which days to include in the graph.
 SEASON_NUM = 1
 DAY_START = 0
 DAY_END = 240
 
+# ROLLING_AVG_WINDOW: smooths out the graph. higher makes it smoother
 ROLLING_AVG_WINDOW = 5
 
-SOLO_BATTING_STATS = ['ba', 'obp', 'slg', 'ops', 'babip', 'bb_p', 'k_p', 'sb_p']
-SOLO_PITCHING_STATS = ['era', 'fip_r', 'whip', 'h9', 'hr9', 'k9', 'bb9', 'kpbb']
+# USE_SOLO_CUSTOM_STATS, SOLO_CUSTOM_STATS: lets you choose which stats you want to include in the individual-player stat mode.
 USE_SOLO_CUSTOM_STATS = False
 SOLO_CUSTOM_STATS = ['ops', 'era']
 
+# TEAM_BATTER_STAT, TEAM_PITCHER_STAT: the stat that gets compared across a team when in either 'Batters' or 'Pitchers' mode.
 TEAM_BATTER_STAT = 'ops'
 TEAM_PITCHER_STAT = 'era'
 
+# SOLO_BATTING_STATS, SOLO_PITCHING_STATS: stats you can choose from (and show up in the individual-player stat mode). don't touch this!
+SOLO_BATTING_STATS = ['ba', 'obp', 'slg', 'ops', 'babip', 'bb_p', 'k_p', 'sb_p']
+SOLO_PITCHING_STATS = ['era', 'fip_r', 'whip', 'h9', 'hr9', 'k9', 'bb9', 'kpbb']
+
+# USE_CUSTOM_COLORS, CUSTOM_COLORS: lets you choose a custom set of line colors for your graph.
+USE_CUSTOM_COLORS = False
+CUSTOM_COLORS = '#7F3C8D,#11A579,#3969AC,#F2B701,#E73F74,#80BA5A,#E68310,#008695,#CF1C90,#f97b72,#4b4b8f,#A5AA99'.split(',')
+
+# MAX_CONNECTIONS: the number of simultaneous API requests that can be active at a time. please don't overload freecashe.ws
 MAX_CONNECTIONS = 4
+
+##################################################################
+# don't change anything below unless you know what you're doing! #
+##################################################################
+
+# cache stuff
 SCRIPT_PATH = Path(getsourcefile(lambda: 0)).resolve()
 DB_PATH = SCRIPT_PATH.parent / 'MMOLBStatHistory.db'
-
 CACHE = SQLiteBackend(
   cache_name=DB_PATH,  # For SQLite, this will be used as the filename
   expire_after=60*25,                         
 )
 
-USE_CUSTOM_COLORS = False
-CUSTOM_COLORS = '#7F3C8D,#11A579,#3969AC,#F2B701,#E73F74,#80BA5A,#E68310,#008695,#CF1C90,#f97b72,#4b4b8f,#A5AA99'.split(',')
+# custom color handler
 CYCLER = cycler(color=CUSTOM_COLORS) if USE_CUSTOM_COLORS else None
 
+# x-tick stuff
 XTICK_OPTIONS = MaxNLocator(nbins=15, integer=True, prune=None)
 
-# ok fixing greater league messed up lesser league so i am resolving this once and for all
 def get_actual_start(l_id):
   is_greater_league = (l_id in ['6805db0cac48194de3cd3fe4', '6805db0cac48194de3cd3fe5'])
   if is_greater_league: # e.g. if DAY_START == 1, no change. if DAY_START == 2, add 1
@@ -369,7 +389,7 @@ def plot_solo_stats(p_statlines, p_info, t_info, p_feed, day_start, day_end):
 
 def main():
   if STAT_MODE == 'Player':
-    p_info = get_player_info_lite(PLAYER_ID)
+    p_info = get_player_info_lite(ID)
     if p_info == {}:
       print('Invalid player ID.')
       exit()
@@ -378,14 +398,14 @@ def main():
     l_id = t_info['League']
     actual_start = get_actual_start(l_id)
     actual_end = get_actual_end(l_id)
-    p_history = get_player_stat_history(PLAYER_ID, SEASON_NUM, actual_start, actual_end)
+    p_history = get_player_stat_history(ID, SEASON_NUM, actual_start, actual_end)
     #print(p_history)
     p_statlines = parse_player_stat_history(p_history, p_info)
     #print(p_statlines)
     p_feed = parse_feed(p_info, SEASON_NUM, actual_start, actual_end)
     plot_solo_stats(p_statlines, p_info, t_info, p_feed, actual_start, actual_end)
   else:
-    t_info = get_team_info_lite(TEAM_ID)
+    t_info = get_team_info_lite(ID)
     if t_info == {}:
       print('Invalid team ID.')
       exit()
@@ -394,7 +414,7 @@ def main():
     actual_start = get_actual_start(l_id)
     actual_end = get_actual_end(l_id)
     #print(t_dict)
-    t_history = get_team_stat_history(TEAM_ID, t_dict, STAT_MODE, SEASON_NUM, actual_start, actual_end)
+    t_history = get_team_stat_history(ID, t_dict, STAT_MODE, SEASON_NUM, actual_start, actual_end)
     t_parsed = parse_team_stat_history(t_history, t_dict)
     #for player_id in t_parsed:
       #print(player_id)
