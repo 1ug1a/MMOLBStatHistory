@@ -17,9 +17,9 @@ from pathlib import Path
 # config stuff!
 
 # STAT_MODE: decides what gets graphed. 'Player', 'Batters', or 'Pitchers'.
-STAT_MODE = 'Pitchers' 
+STAT_MODE = 'Batters' 
 # ID: make sure to use a player ID for 'Player' mode, and a team ID for 'Batters'/'Pitchers'.
-ID = '6806c6869edf4f7b46032b9a'
+ID = '6805db0cac48194de3cd40b5'
 
 # SEASON_NUM, DAY_START, DAY_END: choose which days to include in the graph.
 SEASON_NUM = 1
@@ -27,7 +27,7 @@ DAY_START = 0
 DAY_END = 240
 
 # ROLLING_AVG_WINDOW: smooths out the graph. higher makes it smoother
-ROLLING_AVG_WINDOW = 5
+ROLLING_AVG_WINDOW = 3
 
 # USE_SOLO_CUSTOM_STATS, SOLO_CUSTOM_STATS: lets you choose which stats you want to include in the individual-player stat mode.
 USE_SOLO_CUSTOM_STATS = False
@@ -42,7 +42,7 @@ SOLO_BATTING_STATS = ['ba', 'obp', 'slg', 'ops', 'babip', 'bb_p', 'k_p', 'sb_p']
 SOLO_PITCHING_STATS = ['era', 'fip_r', 'whip', 'h9', 'hr9', 'k9', 'bb9', 'kpbb']
 
 # USE_CUSTOM_COLORS, CUSTOM_COLORS: lets you choose a custom set of line colors for your graph.
-USE_CUSTOM_COLORS = False
+USE_CUSTOM_COLORS = True
 CUSTOM_COLORS = '#7F3C8D,#11A579,#3969AC,#F2B701,#E73F74,#80BA5A,#E68310,#008695,#CF1C90,#f97b72,#4b4b8f,#A5AA99'.split(',')
 
 # MAX_CONNECTIONS: the number of simultaneous API requests that can be active at a time. please don't overload freecashe.ws
@@ -82,7 +82,7 @@ def get_actual_end(l_id):
 
 # info-gathering
 SEASON_TIMESTAMPS = {
-  0: '&at=2025-05-05T06:33:28.318Z'
+  0: '&at=2025-05-04T10:33:28Z',
 }
 
 def get_player_info(p_id):
