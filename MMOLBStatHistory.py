@@ -19,12 +19,12 @@ from pathlib import Path
 # STAT_MODE: decides what gets graphed. 'Player', 'Batters', or 'Pitchers'.
 STAT_MODE = 'Batters' 
 # ID: make sure to use a player ID for 'Player' mode, and a team ID for 'Batters'/'Pitchers'.
-ID = '6805db0cac48194de3cd40b5'
+ID = '6805db0cac48194de3cd4069'
 
 # SEASON_NUM, DAY_START, DAY_END: choose which days to include in the graph.
 SEASON_NUM = 1
 DAY_START = 0
-DAY_END = 240
+DAY_END = 250
 
 # ROLLING_AVG_WINDOW: smooths out the graph. higher makes it smoother
 ROLLING_AVG_WINDOW = 3
@@ -83,6 +83,7 @@ def get_actual_end(l_id):
 # info-gathering
 SEASON_TIMESTAMPS = {
   0: '&at=2025-05-04T10:33:28Z',
+  1: '&at=2025-06-22T18:37:39Z',
 }
 
 def get_player_info(p_id):
