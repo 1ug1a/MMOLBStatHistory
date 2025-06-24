@@ -10,6 +10,8 @@ import asyncio
 from inspect import getsourcefile
 from pathlib import Path
 
+import re
+
 #######################################
 # mmolb stat history by dusk (@1ug1a) #
 #######################################
@@ -17,14 +19,14 @@ from pathlib import Path
 # config stuff!
 
 # STAT_MODE: decides what gets graphed. 'Player', 'Batters', or 'Pitchers'.
-STAT_MODE = 'Batters' 
+STAT_MODE = 'Pitchers' 
 # ID: make sure to use a player ID for 'Player' mode, and a team ID for 'Batters'/'Pitchers'.
-ID = '6805db0cac48194de3cd4069'
+ID = '6806c6869edf4f7b46032b9a'
 
 # SEASON_NUM, DAY_START, DAY_END: choose which days to include in the graph.
-SEASON_NUM = 1
+SEASON_NUM = 2
 DAY_START = 0
-DAY_END = 250
+DAY_END = 20
 
 # ROLLING_AVG_WINDOW: smooths out the graph. higher makes it smoother
 ROLLING_AVG_WINDOW = 3
@@ -42,7 +44,7 @@ SOLO_BATTING_STATS = ['ba', 'obp', 'slg', 'ops', 'babip', 'bb_p', 'k_p', 'sb_p']
 SOLO_PITCHING_STATS = ['era', 'fip_r', 'whip', 'h9', 'hr9', 'k9', 'bb9', 'kpbb']
 
 # USE_CUSTOM_COLORS, CUSTOM_COLORS: lets you choose a custom set of line colors for your graph.
-USE_CUSTOM_COLORS = True
+USE_CUSTOM_COLORS = False
 CUSTOM_COLORS = '#7F3C8D,#11A579,#3969AC,#F2B701,#E73F74,#80BA5A,#E68310,#008695,#CF1C90,#f97b72,#4b4b8f,#A5AA99'.split(',')
 
 # MAX_CONNECTIONS: the number of simultaneous API requests that can be active at a time. please don't overload freecashe.ws
@@ -112,8 +114,12 @@ def parse_feed(info, season_num, day_start, day_end):
   parsed_feed = {}
   for entry in feed:
     # todo: proper handling of special days (as it doesn't make a mark on the graph)
-    if entry['season'] == season_num and (day_start <= entry['day'] <= day_end if isinstance(entry['day'], int) else True) and entry['type'] == 'augment':
-      parsed_feed[entry['day']] = entry['text']
+    if entry['season'] == season_num and (day_start <= entry['day'] <= day_end if isinstance(entry['day'], int) else True):
+      if (entry['type'] == 'augment') or ('Shipment' in entry['text']) or ('Special Delivery' in entry['text']):
+        if entry['day'] not in parsed_feed: 
+          parsed_feed[entry['day']] = entry['text']
+        else:
+          parsed_feed[entry['day']] = parsed_feed[entry['day']] + ' ' + entry['text']
   return parsed_feed
 
 def get_player_stat_history(p_id, season_num, day_start, day_end):
@@ -315,7 +321,7 @@ def plot_team_stats(t_parsed, t_info, t_dict, t_feed, day_start, day_end, stat_m
   t_name = f'{t_info['Location']} {t_info['Name']}'
 
   ax.set_xlabel('Day')
-  ax.set_xlim(left=day_start, right=day_end)
+  ax.set_xlim(left=updated_days[0], right=day_end)
   ax.set_title(f'{t_name} S{SEASON_NUM} {stat_mode[:-3] + "ing"} History ({stat.upper()})')
   ax.grid(which='major', color='#999999', linewidth=0.8)
   ax.grid(which='minor', color='#CCCCCC', linestyle=':', linewidth=0.5)
@@ -327,21 +333,33 @@ def plot_team_stats(t_parsed, t_info, t_dict, t_feed, day_start, day_end, stat_m
   active_players = set([f'{t_dict[p_id]["FirstName"]} {t_dict[p_id]["LastName"]}' for p_id in p_ids])
   text = ''
   for day in t_feed:
-    
     if any(name in t_feed[day] for name in active_players):
-      text += f'Day {day}: {t_feed[day]}\n' if isinstance(day, int) else f'{day}: {t_feed[day]}\n'
+      # make team-wide feed events much shorter
+      feed_entry = t_feed[day]
+      for name in active_players:
+        if '.' in name:
+          feed_entry = feed_entry.replace(name, name.replace('.', '*'))
+      feed_entry = feed_entry.split('.')
+      new_entry = []
+      for sentence in feed_entry:
+        for name in active_players:
+          if name.replace('.', '*') in sentence:
+            equipment_emoji = '|'.join(['🧢 ', '👕 ', '🧤 ', '👟 ', '💍 '])
+            new_sentence = re.sub(equipment_emoji, '', sentence)
+            new_entry.append(new_sentence.replace('*', '.').lstrip())
+      new_entry = new_entry[0] + ' (applied team-wide).' if len(new_entry) > 3 else '. '.join(new_entry) + '.'
+
+      text += f'Day {day}: {new_entry}\n' if isinstance(day, int) else f'{day}: {new_entry}\n'
       if isinstance(day, int):
-        ax.axvline(x=day, color='gray', linestyle='--', label=t_feed[day])
+        ax.axvline(x=day, color='gray', linestyle='--', label=new_entry)
   text = text.rstrip('\n')
   print(text)
 
   # these are too tall to have in the layout and i cannot see another way around it
-  '''
   ax.annotate(text,
               xy = (0, -50),
               xycoords = 'axes pixels',
               va = 'top')
-  '''
   
   plt.show()
 
@@ -373,7 +391,7 @@ def plot_solo_stats(p_statlines, p_info, t_info, p_feed, day_start, day_end):
   t_name = f'{t_info['Location']} {t_info['Name']}'
 
   ax.set_xlabel('Day')
-  ax.set_xlim(left=day_start, right=day_end)
+  ax.set_xlim(left=day_numbers[0], right=day_end)
   ax.set_title(f'{p_name} ({t_name}) S{SEASON_NUM} {p_pos_type} History')
   ax.grid(which='major', color='#999999', linewidth=0.8)
   ax.grid(which='minor', color='#CCCCCC', linestyle=':', linewidth=0.5)
@@ -384,8 +402,21 @@ def plot_solo_stats(p_statlines, p_info, t_info, p_feed, day_start, day_end):
 
   text = ''
   for day in p_feed:
-    text += f'Day {day}: {p_feed[day]}\n' if isinstance(day, int) else f'{day}: {p_feed[day]}\n'
-    ax.axvline(x=day, color='gray', linestyle='--', label=p_feed[day])
+    # make team-wide feed events much shorter
+    feed_entry = p_feed[day]
+    if '.' in p_name:
+      feed_entry = feed_entry.replace(p_name, p_name.replace('.', '*'))
+    feed_entry = feed_entry.split('.')
+    new_entry = []
+    for sentence in feed_entry:
+      if p_name.replace('.', '*') in sentence:
+        equipment_emoji = '|'.join(['🧢 ', '👕 ', '🧤 ', '👟 ', '💍 '])
+        new_sentence = re.sub(equipment_emoji, '', sentence)
+        new_entry.append(new_sentence.replace('*', '.').lstrip())
+    new_entry = new_entry[0] + '.'
+    
+    text += f'Day {day}: {new_entry}\n' if isinstance(day, int) else f'{day}: {new_entry}\n'
+    ax.axvline(x=day, color='gray', linestyle='--', label=new_entry)
   text = text.rstrip('\n')
   #print(text)
 
