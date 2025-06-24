@@ -19,17 +19,17 @@ import re
 # config stuff!
 
 # STAT_MODE: decides what gets graphed. 'Player', 'Batters', or 'Pitchers'.
-STAT_MODE = 'Pitchers' 
+STAT_MODE = 'Batters' 
 # ID: make sure to use a player ID for 'Player' mode, and a team ID for 'Batters'/'Pitchers'.
 ID = '6806c6869edf4f7b46032b9a'
 
 # SEASON_NUM, DAY_START, DAY_END: choose which days to include in the graph.
 SEASON_NUM = 2
 DAY_START = 0
-DAY_END = 20
+DAY_END = 40
 
 # ROLLING_AVG_WINDOW: smooths out the graph. higher makes it smoother
-ROLLING_AVG_WINDOW = 3
+ROLLING_AVG_WINDOW = 1
 
 # USE_SOLO_CUSTOM_STATS, SOLO_CUSTOM_STATS: lets you choose which stats you want to include in the individual-player stat mode.
 USE_SOLO_CUSTOM_STATS = False
@@ -66,7 +66,7 @@ CACHE = SQLiteBackend(
 CYCLER = cycler(color=CUSTOM_COLORS) if USE_CUSTOM_COLORS else None
 
 # x-tick stuff
-XTICK_OPTIONS = MaxNLocator(nbins=15, integer=True, prune=None)
+XTICK_OPTIONS = MaxNLocator(nbins=15, integer=True, prune=None, steps=[1, 2, 4, 5, 10])
 
 def get_actual_start(l_id):
   is_greater_league = (l_id in ['6805db0cac48194de3cd3fe4', '6805db0cac48194de3cd3fe5'])
@@ -346,8 +346,13 @@ def plot_team_stats(t_parsed, t_info, t_dict, t_feed, day_start, day_end, stat_m
           if name.replace('.', '*') in sentence:
             equipment_emoji = '|'.join(['🧢 ', '👕 ', '🧤 ', '👟 ', '💍 '])
             new_sentence = re.sub(equipment_emoji, '', sentence)
-            new_entry.append(new_sentence.replace('*', '.').lstrip())
-      new_entry = new_entry[0] + ' (applied team-wide).' if len(new_entry) > 3 else '. '.join(new_entry) + '.'
+            new_sentence = new_sentence.replace('*', '.').lstrip()
+            try:
+              new_sentence = new_sentence[new_sentence.index('!')+2:]
+            except:
+              pass
+            new_entry.append(new_sentence)
+      new_entry = new_entry[0] + f' (+{len(new_entry)-1} more).' if len(new_entry) > 1 else '. '.join(new_entry) + '.'
 
       text += f'Day {day}: {new_entry}\n' if isinstance(day, int) else f'{day}: {new_entry}\n'
       if isinstance(day, int):
@@ -412,7 +417,12 @@ def plot_solo_stats(p_statlines, p_info, t_info, p_feed, day_start, day_end):
       if p_name.replace('.', '*') in sentence:
         equipment_emoji = '|'.join(['🧢 ', '👕 ', '🧤 ', '👟 ', '💍 '])
         new_sentence = re.sub(equipment_emoji, '', sentence)
-        new_entry.append(new_sentence.replace('*', '.').lstrip())
+        new_sentence = new_sentence.replace('*', '.').lstrip()
+        try:
+          new_sentence = new_sentence[new_sentence.index('!')+2:]
+        except:
+          pass
+        new_entry.append(new_sentence)
     new_entry = new_entry[0] + '.'
     
     text += f'Day {day}: {new_entry}\n' if isinstance(day, int) else f'{day}: {new_entry}\n'
