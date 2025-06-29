@@ -15,37 +15,31 @@ from pprint import pprint
 from collections import defaultdict
 import json
 
+import csv
+import io
+
 #######################################
 # mmolb stat history by dusk (@1ug1a) #
 #######################################
 
 # config stuff!
 
-# STAT_MODE: decides what gets graphed. 'Player', 'Batters', or 'Pitchers'.
+# STAT_MODE: decides what gets graphed. 'Batter', 'Pitcher', 'Batters', or 'Pitchers'.
 STAT_MODE = 'Batters' 
 MEAN_TYPE = 'Rolling'
-# ID: make sure to use a player ID for 'Player' mode, and a team ID for 'Batters'/'Pitchers'.
+# ID: make sure to use a player ID for 'Batter'/'Pitcher' mode, and a team ID for 'Batters'/'Pitchers'.
 ID = '6806c6869edf4f7b46032b9a'
 
-# SEASON_NUM, DAY_START, DAY_END: choose which days to start counting from.
-TIME_START = [1, 0]
-TIME_END = [2, 120]
+# TIME_START, TIME_END: format: (season, day)
+TIME_START = (1, 0)
+TIME_END = (2, 120)
 
-# GRAPH_SMOOTHING: 1 uses the raw graph values. higher makes the graph smoother at the cost of accuracy.
-GRAPH_SMOOTHING = 10
-ROLLING_WINDOW = 40
+# ROLLING_WINDOW: controls the size of the rolling window, in # of games.
+ROLLING_WINDOW = 20
 
-# USE_SOLO_CUSTOM_STATS, SOLO_CUSTOM_STATS: lets you choose which stats you want to include in the individual-player stat mode.
-USE_SOLO_CUSTOM_STATS = False
-SOLO_CUSTOM_STATS = ['ops', 'era']
-
-# TEAM_BATTER_STAT, TEAM_PITCHER_STAT: the stat that gets compared across a team when in either 'Batters' or 'Pitchers' mode.
+# TEAM_BATTER_STAT, TEAM_PITCHER_STAT: the stat that gets tracked.
 TEAM_BATTER_STAT = 'ops'
 TEAM_PITCHER_STAT = 'era'
-
-# SOLO_BATTING_STATS, SOLO_PITCHING_STATS: stats you can choose from (and show up in the individual-player stat mode). don't touch this!
-SOLO_BATTING_STATS = ['ba', 'obp', 'slg', 'ops', 'babip', 'bb_p', 'k_p', 'sb_p']
-SOLO_PITCHING_STATS = ['era', 'fip_r', 'whip', 'h9', 'hr9', 'k9', 'bb9', 'kpbb']
 
 # USE_CUSTOM_COLORS, CUSTOM_COLORS: lets you choose a custom set of line colors for your graph.
 USE_CUSTOM_COLORS = False
@@ -54,9 +48,17 @@ CUSTOM_COLORS = '#7F3C8D,#11A579,#3969AC,#F2B701,#E73F74,#80BA5A,#E68310,#008695
 # MAX_CONNECTIONS: the number of simultaneous API requests that can be active at a time. please don't overload freecashe.ws
 MAX_CONNECTIONS = 4
 
+# USE_SOLO_CUSTOM_STATS, SOLO_CUSTOM_STATS: vestigial, unused as of current ver
+USE_SOLO_CUSTOM_STATS = False
+SOLO_CUSTOM_STATS = ['ops', 'era']
+
 ##################################################################
 # don't change anything below unless you know what you're doing! #
 ##################################################################
+
+# SOLO_BATTING_STATS, SOLO_PITCHING_STATS: stats you can choose from (and show up in the individual-player stat mode). don't touch this!
+SOLO_BATTING_STATS = ['ba', 'obp', 'slg', 'ops', 'babip', 'bb_p', 'k_p', 'sb_p']
+SOLO_PITCHING_STATS = ['era', 'fip_r', 'whip', 'h9', 'hr9', 'k9', 'bb9', 'kpbb']
 
 # cache stuff
 SCRIPT_PATH = Path(getsourcefile(lambda: 0)).resolve()
@@ -72,12 +74,12 @@ CYCLER = cycler(color=CUSTOM_COLORS) if USE_CUSTOM_COLORS else None
 # x-tick stuff
 XTICK_OPTIONS = MaxNLocator(nbins=15, integer=True, prune=None, steps=[1, 2, 4, 5, 10])
 
-async def get_url(session, url, semaphore):
+async def get_url(session, url, format, semaphore):
   async with semaphore:
     async with session.get(url) as response:
-      return await response.json()
+      return await response.json() if format == 'json' else await response.text()
 
-async def get_urls(session, urls, max_con_req=1):
+async def get_urls(session, urls, format, max_con_req=1):
   match urls:
     case str():
       url_list = [urls]
@@ -86,7 +88,7 @@ async def get_urls(session, urls, max_con_req=1):
     case list():
       url_list = urls
   semaphore = asyncio.Semaphore(max_con_req)
-  tasks = [get_url(session, url, semaphore) for url in url_list]
+  tasks = [get_url(session, url, format, semaphore) for url in url_list]
   result = await asyncio.gather(*tasks)
   match urls:
     case str():
@@ -96,32 +98,62 @@ async def get_urls(session, urls, max_con_req=1):
     case list():
       return result
 
+cashews_stat_filters = [
+  'at_bats',
+  'caught_stealing',
+  'doubles',
+  'earned_runs',
+  'hit_batters',
+  'hit_by_pitch',
+  'hits_allowed',
+  'home_runs',
+  'home_runs_allowed',
+  'outs',
+  'plate_appearances',
+  'sac_flies',
+  'singles',
+  'stolen_bases',
+  'strikeouts',
+  'struck_out',
+  'triples',
+  'walked',
+  'walks',
+]
+
 async def cashews_get_chron(session, kind, ids):
   print(f'Getting {kind} info... ', end='')
   ids = ','.join(ids) if not isinstance(ids, str) else ids
   api_url = f'https://freecashe.ws/api/chron/v0/entities?kind={kind}&id={ids}'
-  response = await get_urls(session, api_url)
+  response = await get_urls(session, api_url, 'json')
   response = [response['items'][idx]['data'] for idx in range(0, len(response['items']))]
   print('Done!')
   return response[0] if len(response) == 1 else response
 
 async def cashews_get_stat_history(session, kind, id, time_start, time_end, is_greater_league, mean_type):
-  api_urls = {}
-  time_list = []
   print('Obtaining stat history... ', end='')
-  process_days(time_start, time_end, time_list, is_greater_league, gather_stat_urls, kind, id, time_start, api_urls, mean_type)
-  api_data = await get_urls(session, api_urls, MAX_CONNECTIONS)
-  #print(api_data)
-
-  player_first_history = defaultdict(dict)
-  for time, players in api_data.items():
-    for player in players:
-      player_id = player['player_id']
-      stats = player['stats']
-      player_first_history[player_id][time] = stats
+  url = f'https://freecashe.ws/api/stats?{kind}={id}&start={time_start[0]},{time_start[1]}&end={time_end[0]},{time_end[1]}&group=player,day&fields={','.join(cashews_stat_filters)}'
+  response = await get_urls(session, url, 'csv')
+  time_list = create_time_list(time_start, time_end)
+  api_data = csv_to_stats_dict(response, time_list)
+  #pprint(api_data)
   print('Done!')
+  return api_data
 
-  return dict(player_first_history)
+def csv_to_stats_dict(csv_string, time_list):
+  file = io.StringIO(csv_string)
+  reader = csv.DictReader(file)
+  temp_dict = [row for row in reader]
+  stats_dict = defaultdict(dict)
+  fill_stats = defaultdict(dict)
+  for time in time_list:
+    for row in temp_dict:
+      #print(row)
+      stat_time = (int(row['season']), int(row['day']))
+      id = row['player_id']
+      if stat_time == time:
+        fill_stats[id] = {stat: int(value) for stat, value in row.items() if stat not in ['season', 'day', 'player_id']}
+      stats_dict[id][time] = fill_stats[id]
+  return dict(stats_dict)
 
 def parse_statistics(history_dict):
   print('Parsing statistics... ', end='')
@@ -132,50 +164,14 @@ def parse_statistics(history_dict):
   print('Done!')
   return dict(statistics)
 
-def gather_stat_urls(idx, time_list, kind, id, time_start, api_urls, mean_type):
-  match mean_type:
-    case 'Cumulative':
-      url = f'https://freecashe.ws/api/player-stats?{kind}={id}&start={time_start[0]},{time_start[1]}&end={time_list[idx][0]},{time_list[idx][1]}'
-    case 'Rolling':
-      constant = round(ROLLING_WINDOW/2)
-      idx_start = max(idx-constant, 0)
-      idx_end = min(idx+constant, len(time_list)-1)
-      # print(idx, ':', idx_start, 'to', idx_end)
-      url = f'https://freecashe.ws/api/player-stats?{kind}={id}&start={time_list[idx_start][0]},{time_list[idx_start][1]}&end={time_list[idx_end][0]},{time_list[idx_end][1]}'
-  #print(url)
-  api_urls[time_list[idx]] = url
-
-def process_days(time_start, time_end, time_list, is_greater_league, function, *args):
+def create_time_list(time_start, time_end):
+  time_list = []
   for season in range(time_start[0], time_end[0]+1):
-    season_day_start = time_start[1] if time_start[1] != 0 and season == time_start[0] else (1 if is_greater_league else 2)
-    season_day_end = time_end[1] if season == time_end[0] else (255 if is_greater_league else 240)
-    for day in range(season_day_start, season_day_end+1, 2):
+    season_day_start = time_start[1] if time_start[1] != 0 and season == time_start[0] else 0
+    season_day_end = time_end[1] if season == time_end[0] else 239
+    for day in range(season_day_start, season_day_end+1):
       time_list.append((season, day))
-  #pprint(time_list)
-  for idx in range(0, len(time_list)):
-    function(idx, time_list, *args)
-
-def get_valid_start(time_start, is_greater_league):
-  season = time_start[0]
-  day = time_start[1]
-  if is_greater_league: # e.g. if DAY_START == 1, no change. if DAY_START == 2, add 1
-    day = day + (day + 1) % 2
-    day = 1 if day < 1 else day
-  else:
-    day = day + (day) % 2
-    day = 2 if day < 2 else day
-  return (season, day)
-
-def get_valid_end(time_end, is_greater_league):
-  season = time_end[0]
-  day = time_end[1]
-  if is_greater_league: # e.g. if DAY_END == 140, subtract 1.
-    day = day - (day + 1) % 2
-    day = 255 if day > 255 else day
-  else:
-    day = day - (day) % 2
-    day = 240 if day > 240 else day
-  return (season, day)
+  return time_list
 
 def parse_batting_stats(stats):
   _pa   = stats.get('plate_appearances', 0)
@@ -287,38 +283,32 @@ def parse_player_dict(team_info):
     player_dict[player_id] = player
   return dict(player_dict)
 
-def plot_graph(stat_mode, mean_type, rolling_window, stats, team_info, feed, player_dict, time_start, time_end):
-  match stat_mode:
-    case 'Player':
-      plot_solo_graph(mean_type, rolling_window, stats, team_info, feed, player_dict, time_start, time_end)
-    case 'Batters' | 'Pitchers':
-      plot_team_graph(stat_mode, mean_type, rolling_window, stats, team_info, feed, player_dict, time_start, time_end)
-
-def plot_team_graph(stat_mode, mean_type, rolling_window, stats, team_info, feed, player_dict, valid_ids, time_start, time_end):
+def plot_graph(stat_mode, mean_type, rolling_window, stats, team_info, feed, player_dict, valid_ids, time_start, time_end, league):
   player_ids = valid_ids
   player_names = [f"{player_dict[id]['FirstName']} {player_dict[id]['LastName']}" for id in player_ids]
   player_labels = {id: f"{player_dict[id]['Slot']} {player_dict[id]['FirstName']} {player_dict[id]['LastName']}" for id in player_ids}
   
   match stat_mode:
-    case 'Batters':
+    case 'Batters' | 'Batter':
       stat = TEAM_BATTER_STAT
       stat_index = 0
-    case 'Pitchers':
+    case 'Pitchers' | 'Pitcher':
       stat = TEAM_PITCHER_STAT
       stat_index = 1
-
+  
   len_stats = len(stats[next(iter(stats))])
   time_units = range(0, len_stats)
+  time_list = create_time_list(time_start, time_end)
   plots = {}
   for id, history in stats.items():
-    #print(list(history.values()))
-    plots[id] = [value[stat_index][stat] for value in history.values()]
+    if id in valid_ids:
+      plots[id] = [value[stat_index][stat] for value in history.values()]
   #print(len_stats)
   #print(len(stat_lines[next(iter(stat_lines))]))
 
   means = {}
   for id in valid_ids:
-    means[id] = pd.Series(plots[id]).rolling(window=GRAPH_SMOOTHING, min_periods=1, center=True).mean()
+    means[id] = pd.Series(plots[id]).rolling(window=ROLLING_WINDOW, min_periods=1).mean()
 
   # start plotting
   fig, ax = plt.subplots(layout="constrained", figsize=(12, 6))
@@ -330,9 +320,11 @@ def plot_team_graph(stat_mode, mean_type, rolling_window, stats, team_info, feed
 
   t_name = f'{team_info['Location']} {team_info['Name']}'
 
-  ax.set_xlabel('Game')
-  ax.set_xlim(left=0, right=len_stats)
-  ax.set_title(f'{t_name} S{time_start[0]}D{time_start[1]}-S{time_end[0]}D{time_end[1]} {mean_type} {stat_mode[:-3] + "ing"} History ({stat.upper()}) - {rolling_window} Game Average (Smoothed)')
+  ax.set_xlabel('Day')
+  ax.set_xlim(left=0, right=len_stats-1)
+  ax.set_xticks(time_units)
+  ax.set_xticklabels(time_list)
+  ax.set_title(f'{t_name} {stat_mode[:-3] + "ing"} History ({stat.upper()}) - {rolling_window} Day {mean_type} Average (S{time_start[0]}D{time_start[1]:03}-S{time_end[0]}D{time_end[1]:03})')
   ax.grid(which='major', color='#999999', linewidth=0.8)
   ax.grid(which='minor', color='#CCCCCC', linestyle=':', linewidth=0.5)
   ax.minorticks_on()
@@ -344,8 +336,8 @@ def plot_team_graph(stat_mode, mean_type, rolling_window, stats, team_info, feed
   cmap = plt.get_cmap("tab10")
   for time_unit, actual_time in enumerate(stats[next(iter(stats))]):
     #print(time_unit, actual_time)
-    if isinstance(actual_time[1], int) and (actual_time in feed or (actual_time[0], actual_time[1]+1) in feed):
-      names_found = [name in feed.get(actual_time, '') or name in feed.get((actual_time[0], actual_time[1]+1), '') for name in player_names]
+    if isinstance(actual_time[1], int) and (actual_time in feed):
+      names_found = [name in feed.get(actual_time, '') for name in player_names]
       if names_found.count(True) > 1:
         ax.axvline(x=time_unit, color='black', linestyle='--')
       else:
@@ -355,26 +347,26 @@ def plot_team_graph(stat_mode, mean_type, rolling_window, stats, team_info, feed
 
   plt.show()
 
-def plot_solo_graph(stats, team_info, player_dict, time_start, time_end):
-  pass
-
 async def main():
   async with CachedSession(cache=CACHE) as session:
-    team_info = await cashews_get_chron(session, 'team', ID)
+    match STAT_MODE:
+      case 'Pitcher' | 'Batter':
+        player_info = await cashews_get_chron(session, 'player', ID)
+        team_id = player_info['TeamID']
+      case 'Pitchers' | 'Batters':
+        team_id = ID
+
+    team_info = await cashews_get_chron(session, 'team', team_id)
     player_dict = parse_player_dict(team_info)
-    #pprint(player_dict)
-    valid_ids = [id for id, info in player_dict.items() if info['PositionType'] == STAT_MODE[:-1]]
-    valid_names = [f"{info['FirstName']} {info['LastName']}" for id, info in player_dict.items() if info['PositionType'] == STAT_MODE[:-1]]
+    valid_ids = [id for id, info in player_dict.items() if info['PositionType'] == STAT_MODE[:-1]] if STAT_MODE in ['Pitchers', 'Batters'] else [ID]
+    valid_names = [f"{player_dict[id]['FirstName']} {player_dict[id]['LastName']}" for id in valid_ids]
     feed = parse_feed(team_info['Feed'], valid_names, TIME_START, TIME_END)
     is_greater_league = team_info['League'] in ['6805db0cac48194de3cd3fe4', '6805db0cac48194de3cd3fe5']
-    valid_start = get_valid_start(TIME_START, is_greater_league)
-    valid_end = get_valid_end(TIME_END, is_greater_league)
-    team_stat_history = await cashews_get_stat_history(session, 'team', ID, valid_start, valid_end, is_greater_league, MEAN_TYPE)
+    team_stat_history = await cashews_get_stat_history(session, 'team', team_id, TIME_START, TIME_END, is_greater_league, MEAN_TYPE)
     team_statistics = parse_statistics(team_stat_history)
-    #pprint(team_statistics[next(iter(team_statistics))])
     for time, entry in feed.items():
       print(f"{team_info['Emoji']} Season {time[0]}, {'Day ' if type(time[1]) == int else ''}{time[1]}: {entry}")
-    plot_team_graph(STAT_MODE, MEAN_TYPE, ROLLING_WINDOW, team_statistics, team_info, feed, player_dict, valid_ids, TIME_START, TIME_END)
+    plot_graph(STAT_MODE, MEAN_TYPE, ROLLING_WINDOW, team_statistics, team_info, feed, player_dict, valid_ids, TIME_START, TIME_END, team_info['League'])
 
 if __name__ == '__main__':
   asyncio.run(main())
